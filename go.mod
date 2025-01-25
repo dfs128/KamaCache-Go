@@ -1,4 +1,4 @@
-module github.com/juguagua/lc-cache
+module github.com/juguagua/lcache
 
 go 1.22
 

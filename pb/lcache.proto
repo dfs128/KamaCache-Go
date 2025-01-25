@@ -16,7 +16,7 @@ message ResponseForDelete {
   bool value = 1;
 }
 
-service GroupCache {
+service LCache {
   rpc Get(Request) returns (ResponseForGet);
   rpc Delete(Request) returns(ResponseForDelete);
 }

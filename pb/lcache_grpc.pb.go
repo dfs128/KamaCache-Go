@@ -19,139 +19,139 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GroupCache_Get_FullMethodName    = "/pb.GroupCache/Get"
-	GroupCache_Delete_FullMethodName = "/pb.GroupCache/Delete"
+	LCache_Get_FullMethodName    = "/pb.LCache/Get"
+	LCache_Delete_FullMethodName = "/pb.LCache/Delete"
 )
 
-// GroupCacheClient is the client API for GroupCache service.
+// LCacheClient is the client API for LCache service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type GroupCacheClient interface {
+type LCacheClient interface {
 	Get(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error)
 	Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error)
 }
 
-type groupCacheClient struct {
+type lCacheClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewGroupCacheClient(cc grpc.ClientConnInterface) GroupCacheClient {
-	return &groupCacheClient{cc}
+func NewLCacheClient(cc grpc.ClientConnInterface) LCacheClient {
+	return &lCacheClient{cc}
 }
 
-func (c *groupCacheClient) Get(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error) {
+func (c *lCacheClient) Get(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResponseForGet)
-	err := c.cc.Invoke(ctx, GroupCache_Get_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, LCache_Get_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *groupCacheClient) Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error) {
+func (c *lCacheClient) Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResponseForDelete)
-	err := c.cc.Invoke(ctx, GroupCache_Delete_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, LCache_Delete_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// GroupCacheServer is the server API for GroupCache service.
-// All implementations must embed UnimplementedGroupCacheServer
+// LCacheServer is the server API for LCache service.
+// All implementations must embed UnimplementedLCacheServer
 // for forward compatibility.
-type GroupCacheServer interface {
+type LCacheServer interface {
 	Get(context.Context, *Request) (*ResponseForGet, error)
 	Delete(context.Context, *Request) (*ResponseForDelete, error)
-	mustEmbedUnimplementedGroupCacheServer()
+	mustEmbedUnimplementedLCacheServer()
 }
 
-// UnimplementedGroupCacheServer must be embedded to have
+// UnimplementedLCacheServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedGroupCacheServer struct{}
+type UnimplementedLCacheServer struct{}
 
-func (UnimplementedGroupCacheServer) Get(context.Context, *Request) (*ResponseForGet, error) {
+func (UnimplementedLCacheServer) Get(context.Context, *Request) (*ResponseForGet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedGroupCacheServer) Delete(context.Context, *Request) (*ResponseForDelete, error) {
+func (UnimplementedLCacheServer) Delete(context.Context, *Request) (*ResponseForDelete, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
-func (UnimplementedGroupCacheServer) mustEmbedUnimplementedGroupCacheServer() {}
-func (UnimplementedGroupCacheServer) testEmbeddedByValue()                    {}
+func (UnimplementedLCacheServer) mustEmbedUnimplementedLCacheServer() {}
+func (UnimplementedLCacheServer) testEmbeddedByValue()                {}
 
-// UnsafeGroupCacheServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to GroupCacheServer will
+// UnsafeLCacheServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LCacheServer will
 // result in compilation errors.
-type UnsafeGroupCacheServer interface {
-	mustEmbedUnimplementedGroupCacheServer()
+type UnsafeLCacheServer interface {
+	mustEmbedUnimplementedLCacheServer()
 }
 
-func RegisterGroupCacheServer(s grpc.ServiceRegistrar, srv GroupCacheServer) {
-	// If the following call pancis, it indicates UnimplementedGroupCacheServer was
+func RegisterLCacheServer(s grpc.ServiceRegistrar, srv LCacheServer) {
+	// If the following call pancis, it indicates UnimplementedLCacheServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&GroupCache_ServiceDesc, srv)
+	s.RegisterService(&LCache_ServiceDesc, srv)
 }
 
-func _GroupCache_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _LCache_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GroupCacheServer).Get(ctx, in)
+		return srv.(LCacheServer).Get(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GroupCache_Get_FullMethodName,
+		FullMethod: LCache_Get_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupCacheServer).Get(ctx, req.(*Request))
+		return srv.(LCacheServer).Get(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _GroupCache_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _LCache_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GroupCacheServer).Delete(ctx, in)
+		return srv.(LCacheServer).Delete(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GroupCache_Delete_FullMethodName,
+		FullMethod: LCache_Delete_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupCacheServer).Delete(ctx, req.(*Request))
+		return srv.(LCacheServer).Delete(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// GroupCache_ServiceDesc is the grpc.ServiceDesc for GroupCache service.
+// LCache_ServiceDesc is the grpc.ServiceDesc for LCache service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var GroupCache_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "pb.GroupCache",
-	HandlerType: (*GroupCacheServer)(nil),
+var LCache_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "pb.LCache",
+	HandlerType: (*LCacheServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Get",
-			Handler:    _GroupCache_Get_Handler,
+			Handler:    _LCache_Get_Handler,
 		},
 		{
 			MethodName: "Delete",
-			Handler:    _GroupCache_Delete_Handler,
+			Handler:    _LCache_Delete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
