@@ -1,4 +1,4 @@
-package lc_cache
+package lcache
 
 import (
 	"fmt"

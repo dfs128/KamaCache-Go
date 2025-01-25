@@ -1,4 +1,4 @@
-package lc_cache
+package lcache
 
 import (
 	"github.com/juguagua/lc-cache/consistenthash"
