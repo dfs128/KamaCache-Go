@@ -3,142 +3,117 @@ package lcache
 import (
 	"context"
 	"fmt"
+	pb "github.com/juguagua/lcache/pb"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-	"log"
 	"net"
 	"strings"
 	"sync"
 )
 
 const (
-	defaultServiceName = "geek-cache"
-	defaultAddr        = "127.0.0.1:7654"
+	defaultSvcName = "lcache"
+	defaultAddr    = "localhost:9999"
 )
 
 type Server struct {
-	pb.UnimplementedGroupCacheServer
-	self       string     // self ip
-	sname      string     // name of service
-	status     bool       // true if the server is running
-	mu         sync.Mutex // guards
-	stopSignal chan error // signal to stop
+	pb.UnimplementedLCacheServer
+	svcName string // service name
+	svcAddr string // service addr
+	status  bool   // service status
+	mu      sync.Mutex
+	stopCh  chan error
 }
 
-type ServerOptions func(*Server)
+type ServerOptions func(server *Server)
 
-func NewServer(self string, opts ...ServerOptions) (*Server, error) {
-	if self == "" {
-		self = defaultAddr
-	} else if !utils.ValidPeerAddr(self) {
-		return nil, fmt.Errorf("invalid address: %v", self)
+func NewServer(addr string, opts ...ServerOptions) (*Server, error) {
+	if addr == "" {
+		addr = defaultAddr
 	}
-	s := Server{
-		self:  self,
-		sname: defaultServiceName,
+	if !ValidPeerAddr(addr) {
+		logrus.Errorf("invalid addr: %s", addr)
+		return nil, fmt.Errorf("invalid addr: %s", addr)
+	}
+	server := &Server{
+		svcAddr: addr,
+		svcName: defaultSvcName,
 	}
 	for _, opt := range opts {
-		opt(&s)
+		opt(server)
 	}
-	return &s, nil
-}
 
-func ServiceName(sname string) ServerOptions {
-	return func(s *Server) {
-		s.sname = sname
-	}
-}
-
-// Log info
-func (s *Server) Log(format string, path ...interface{}) {
-	log.Printf("[Server %s] %s", s.self, fmt.Sprintf(format, path...))
+	return server, nil
 }
 
 func (s *Server) Get(ctx context.Context, in *pb.Request) (*pb.ResponseForGet, error) {
 	group, key := in.GetGroup(), in.GetKey()
-	out := &pb.ResponseForGet{}
-	log.Printf("[Geek-Cache %s] Recv RPC Request for get- (%s)/(%s)", s.self, group, key)
+	logrus.Infof("lcache %s receive rpc requset, group: %s, key: %s", s.svcAddr, group, key)
 
 	if key == "" {
-		return out, fmt.Errorf("key required")
+		return nil, fmt.Errorf("key is empty")
 	}
 	g := GetGroup(group)
 	if g == nil {
-		return out, fmt.Errorf("group not found")
+		return nil, fmt.Errorf("group %s not exist", group)
 	}
+
 	view, err := g.Get(key)
 	if err != nil {
-		return out, err
+		logrus.Errorf("lcache %s get key %s error: %v", s.svcAddr, key, err)
+		return nil, err
 	}
-	out.Value = view.ByteSLice()
-	return out, nil
+	return &pb.ResponseForGet{
+		Value: view.ByteSLice(),
+	}, nil
 }
 
 func (s *Server) Delete(ctx context.Context, in *pb.Request) (*pb.ResponseForDelete, error) {
 	group, key := in.GetGroup(), in.GetKey()
-	out := &pb.ResponseForDelete{}
-	log.Printf("[Geek-Cache %s] Recv RPC Request for delete - (%s)/(%s)", s.self, group, key)
+	logrus.Infof("lcache %s receive rpc requset, group: %s, key: %s", s.svcAddr, group, key)
 
 	if key == "" {
-		return out, fmt.Errorf("key required")
+		return nil, fmt.Errorf("key is empty")
 	}
 	g := GetGroup(group)
 	if g == nil {
-		return out, fmt.Errorf("group not found")
+		return nil, fmt.Errorf("group %s not exist", group)
 	}
-	isSuccess, err := g.Delete(key)
+
+	success, err := g.Delete(key)
 	if err != nil {
-		return out, err
+		logrus.Errorf("lcache %s delete key %s error: %v", s.svcAddr, key, err)
+		return nil, err
 	}
-	out.Value = isSuccess
-	return out, nil
+	return &pb.ResponseForDelete{
+		Value: success,
+	}, nil
 }
 
-func (s *Server) Start() error {
+func (s *Server) Run() error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.status {
-		s.mu.Unlock()
-		return fmt.Errorf("server already running")
+		return fmt.Errorf("server is running")
 	}
 	s.status = true
-	s.stopSignal = make(chan error)
+	s.stopCh = make(chan error)
 
-	port := strings.Split(s.self, ":")[1]
-	l, err := net.Listen("tcp", ":"+port)
+	port := strings.Split(s.svcAddr, ":")[1]
+	_, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %v", port, err)
+		return fmt.Errorf("listen %s error: %v", fmt.Sprintf("%s:%s", s.svcAddr, port), err)
 	}
-	grpcServer := grpc.NewServer()
-	pb.RegisterGroupCacheServer(grpcServer, s)
-	// 启动 reflection 反射服务
-	reflection.Register(grpcServer)
-	go func() {
-		err := registy.Register(s.sname, s.self, s.stopSignal)
-		if err != nil {
-			log.Fatalf(err.Error())
-		}
-		close(s.stopSignal)
-		err = l.Close()
-		if err != nil {
-			log.Fatalf(err.Error())
-		}
-		log.Printf("[%s] Revoke service and close tcp socket ok", s.self)
-	}()
 
-	s.mu.Unlock()
-	if err := grpcServer.Serve(l); s.status && err != nil {
-		return fmt.Errorf("failed to serve on %s: %v", port, err)
-	}
+	server := grpc.NewServer()
+	pb.RegisterLCacheServer(server, s)
+
+	//go func() {
+	//
+	//}
 	return nil
 }
 
 func (s *Server) Stop() {
-	s.mu.Lock()
-	if !s.status {
-		s.mu.Unlock()
-		return
-	}
-	s.stopSignal <- nil
-	s.status = false
-	s.mu.Unlock()
+
 }
