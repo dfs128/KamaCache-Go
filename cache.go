@@ -1,9 +1,10 @@
 package lcache
 
 import (
-	"github.com/juguagua/lc-cache/store"
 	"sync"
 	"time"
+
+	"github.com/juguagua/lc-cache/store"
 )
 
 // cache 实例化lru，封装get和add。

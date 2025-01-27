@@ -2,10 +2,11 @@ package lcache
 
 import (
 	"fmt"
-	"github.com/juguagua/lc-cache/singleflight"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/juguagua/lc-cache/singleflight"
 )
 
 var (
@@ -107,13 +108,13 @@ func (g *Group) Delete(key string) (bool, error) {
 	if isSelf {
 		return g.mainCache.delete(key), nil
 	} else {
-		//use other server to delete the key-value
+		// use other server to delete the key-value
 		success, err := g.deleteFromPeer(peer, key)
 		return success, err
 	}
 }
 
-func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+func (g *Group) getFromPeer(peer Peer, key string) (ByteView, error) {
 	bytes, err := peer.Get(g.name, key)
 	if err != nil {
 		return ByteView{}, err
@@ -123,7 +124,7 @@ func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 	}, nil
 }
 
-func (g *Group) deleteFromPeer(peer PeerGetter, key string) (bool, error) {
+func (g *Group) deleteFromPeer(peer Peer, key string) (bool, error) {
 	success, err := peer.Delete(g.name, key)
 	if err != nil {
 		return false, err

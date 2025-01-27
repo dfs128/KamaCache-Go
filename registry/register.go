@@ -1,4 +1,4 @@
-package etcd
+package registry
 
 import (
 	"context"
@@ -52,7 +52,7 @@ func NewServiceRegistry(cfg *Config) (*ServiceRegistry, error) {
 	}, nil
 }
 
-// EtcdDial 创建gRPC连接
+// EtcdDial 从 etcd 集群选择一个实例与其建立 grpc 连接
 func EtcdDial(c *clientv3.Client, service, target string) (*grpc.ClientConn, error) {
 	em, err := endpoints.NewManager(c, service)
 	if err != nil {
