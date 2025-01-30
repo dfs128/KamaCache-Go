@@ -13,32 +13,29 @@ type call struct {
 
 // Group manages all kinds of calls
 type Group struct {
-	mu sync.Mutex // guards for m
-	m  map[string]*call
+	m sync.Map // 使用sync.Map来优化并发性能
 }
 
 // Do 针对相同的key，保证多次调用Do()，都只会调用一次fn
 func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, error) {
-	// lock protects for m in concurrent calls
-	g.mu.Lock()
-	if g.m == nil {
-		g.m = make(map[string]*call)
+	// Check if there is already an ongoing call for this key
+	if existing, ok := g.m.Load(key); ok {
+		c := existing.(*call)
+		c.wg.Wait()         // Wait for the existing request to finish
+		return c.val, c.err // Return the result from the ongoing call
 	}
-	if c, ok := g.m[key]; ok {
-		g.mu.Unlock()
-		c.wg.Wait()         // wait for doing request
-		return c.val, c.err // request completed, return result
-	}
-	c := new(call) // a new request, and this is the first request for this key
-	c.wg.Add(1)
-	g.m[key] = c
-	g.mu.Unlock()
 
-	c.val, c.err = fn() // with callback
-	c.wg.Done()         // this request was completed, and other requests for this key will be continue
-	g.mu.Lock()
-	delete(g.m, key)
-	g.mu.Unlock()
+	// If no ongoing request, create a new one
+	c := &call{}
+	c.wg.Add(1)
+	g.m.Store(key, c) // Store the call in the map
+
+	// Execute the function and set the result
+	c.val, c.err = fn()
+	c.wg.Done() // Mark the request as done
+
+	// After the request is done, clean up the map
+	g.m.Delete(key)
 
 	return c.val, c.err
 }

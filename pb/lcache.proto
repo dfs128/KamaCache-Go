@@ -6,6 +6,7 @@ option go_package = "./";
 message Request {
   string group = 1;
   string key = 2;
+  bytes value = 3;
 }
 
 message ResponseForGet {
@@ -18,5 +19,6 @@ message ResponseForDelete {
 
 service LCache {
   rpc Get(Request) returns (ResponseForGet);
+  rpc Set(Request) returns (ResponseForGet);
   rpc Delete(Request) returns(ResponseForDelete);
 }

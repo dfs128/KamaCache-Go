@@ -7,6 +7,7 @@ import (
 
 	pb "github.com/juguagua/lcache/pb"
 	"github.com/juguagua/lcache/registry"
+	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 )
@@ -78,6 +79,22 @@ func (c *Client) Delete(group, key string) (bool, error) {
 	}
 
 	return resp.GetValue(), nil
+}
+
+func (c *Client) Set(group, key string, value []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	resp, err := c.grpcCli.Set(ctx, &pb.Request{
+		Group: group,
+		Key:   key,
+		Value: value,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set value to lcache: %v", err)
+	}
+	logrus.Infof("grpc set request resp: %+v", resp)
+	return nil
 }
 
 func (c *Client) Close() error {

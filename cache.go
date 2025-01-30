@@ -4,55 +4,87 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juguagua/lc-cache/store"
+	"github.com/juguagua/lcache/store"
 )
 
-// cache 实例化lru，封装get和add。
 type cache struct {
 	lock       sync.RWMutex
-	lruCache   store.Store
-	cacheBytes int64
+	c          store.Store
+	cacheBytes int64 // 最大缓存大小
 }
 
-func (cache *cache) lruCacheLazyLoadIfNeed() {
-	if cache.lruCache == nil {
+// lruCacheLazyLoadIfNeed 在需要时初始化缓存
+func (cache *cache) lazyLoadIfNeed() {
+	if cache.c == nil {
 		cache.lock.Lock()
 		defer cache.lock.Unlock()
-		if cache.lruCache == nil {
-			cache.lruCache = store.NewLRUCache(cache.cacheBytes)
+		if cache.c == nil {
+			// 使用 Store 接口初始化缓存，通过配置来选择具体策略
+			cache.c = store.NewStore(store.LRU, store.Options{
+				MaxBytes: cache.cacheBytes,
+			})
 		}
 	}
 }
 
+// add 向缓存中添加一个 key-value 对
 func (cache *cache) add(key string, value ByteView) {
-	// lazy load
-	cache.lruCacheLazyLoadIfNeed()
-	cache.lruCache.Add(key, value)
+	// 延迟加载缓存
+	cache.lazyLoadIfNeed()
+	// 调用 Store 接口的 Set 方法
+	cache.c.Set(key, value)
 }
 
+// get 从缓存中获取值
 func (cache *cache) get(key string) (value ByteView, ok bool) {
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
-	if cache.lruCache == nil {
+	if cache.c == nil {
 		return
 	}
-	if v, find := cache.lruCache.Get(key); find {
+	// 调用 Store 接口的 Get 方法
+	if v, found := cache.c.Get(key); found {
 		return v.(ByteView), true
 	}
 	return
 }
 
+// addWithExpiration 向缓存中添加一个带过期时间的 key-value 对
 func (cache *cache) addWithExpiration(key string, value ByteView, expirationTime time.Time) {
-	// lazy load
-	cache.lruCacheLazyLoadIfNeed()
-	cache.lruCache.AddWithExpiration(key, value, expirationTime)
+	// 延迟加载缓存
+	cache.lazyLoadIfNeed()
+	// 调用 Store 接口的 SetWithExpiration 方法
+	cache.c.SetWithExpiration(key, value, time.Until(expirationTime))
 }
 
+// delete 从缓存中删除一个 key
 func (cache *cache) delete(key string) bool {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
-	if cache.lruCache == nil {
-		return true
+	if cache.c == nil {
+		return false
 	}
-	return cache.lruCache.Delete(key)
+	// 调用 Store 接口的 Delete 方法
+	return cache.c.Delete(key)
+}
+
+// Clear 清空缓存
+func (cache *cache) Clear() {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+	if cache.c != nil {
+		// 调用 Store 接口的 Clear 方法
+		cache.c.Clear()
+	}
+}
+
+// Len 返回缓存的当前存储量
+func (cache *cache) Len() int {
+	cache.lock.RLock()
+	defer cache.lock.RUnlock()
+	if cache.c == nil {
+		return 0
+	}
+	// 调用 Store 接口的 Len 方法
+	return cache.c.Len()
 }

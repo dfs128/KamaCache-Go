@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	LCache_Get_FullMethodName    = "/pb.LCache/Get"
+	LCache_Set_FullMethodName    = "/pb.LCache/Set"
 	LCache_Delete_FullMethodName = "/pb.LCache/Delete"
 )
 
@@ -28,6 +29,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LCacheClient interface {
 	Get(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error)
+	Set(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error)
 	Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error)
 }
 
@@ -49,6 +51,16 @@ func (c *lCacheClient) Get(ctx context.Context, in *Request, opts ...grpc.CallOp
 	return out, nil
 }
 
+func (c *lCacheClient) Set(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResponseForGet)
+	err := c.cc.Invoke(ctx, LCache_Set_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *lCacheClient) Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResponseForDelete)
@@ -64,6 +76,7 @@ func (c *lCacheClient) Delete(ctx context.Context, in *Request, opts ...grpc.Cal
 // for forward compatibility.
 type LCacheServer interface {
 	Get(context.Context, *Request) (*ResponseForGet, error)
+	Set(context.Context, *Request) (*ResponseForGet, error)
 	Delete(context.Context, *Request) (*ResponseForDelete, error)
 	mustEmbedUnimplementedLCacheServer()
 }
@@ -77,6 +90,9 @@ type UnimplementedLCacheServer struct{}
 
 func (UnimplementedLCacheServer) Get(context.Context, *Request) (*ResponseForGet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
+}
+func (UnimplementedLCacheServer) Set(context.Context, *Request) (*ResponseForGet, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Set not implemented")
 }
 func (UnimplementedLCacheServer) Delete(context.Context, *Request) (*ResponseForDelete, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
@@ -120,6 +136,24 @@ func _LCache_Get_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LCache_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LCacheServer).Set(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LCache_Set_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LCacheServer).Set(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LCache_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
@@ -148,6 +182,10 @@ var LCache_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Get",
 			Handler:    _LCache_Get_Handler,
+		},
+		{
+			MethodName: "Set",
+			Handler:    _LCache_Set_Handler,
 		},
 		{
 			MethodName: "Delete",
