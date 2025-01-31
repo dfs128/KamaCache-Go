@@ -1,42 +1,62 @@
 package lcache
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/juguagua/lc-cache/singleflight"
+	"github.com/juguagua/lcache/singleflight"
+	"github.com/sirupsen/logrus"
 )
 
 var (
 	lock   sync.RWMutex
-	groups = make(map[string]*Group)
+	groups = sync.Map{}
 )
 
+// Getter 加载键值的回调函数接口
+type Getter interface {
+	Get(ctx context.Context, key string) ([]byte, error)
+}
+
+// GetterFunc 函数类型实现 Getter 接口
+type GetterFunc func(ctx context.Context, key string) ([]byte, error)
+
+func (f GetterFunc) Get(ctx context.Context, key string) ([]byte, error) {
+	return f(ctx, key)
+}
+
+// Group 是一个缓存命名空间
 type Group struct {
-	name      string
-	getter    Getter              // miss callback
-	mainCache cache               // main cache
-	peers     PeerPicker          // pick func
-	loader    *singleflight.Group // make sure that each key is only fetched once
+	name       string
+	getter     Getter
+	mainCache  cache
+	peers      PeerPicker
+	loadGroup  sync.WaitGroup // 防止缓存击穿
+	loadMap    sync.Map       // key -> *call
+	expiration time.Duration  // 缓存过期时间，0表示永不过期
+	loader     *singleflight.Group
 }
 
-func (g *Group) RegisterPeers(peers PeerPicker) {
-	if g.peers != nil {
-		panic("RegisterPeerPicker called multiple times")
-	}
-	g.peers = peers
+// call 正在进行中的请求
+type call struct {
+	wg  sync.WaitGroup
+	val []byte
+	err error
 }
 
-// NewGroup 新创建一个Group
-// 如果存在同名的group会进行覆盖
-func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
+// NewGroup 创建一个新的 Group 实例
+func NewGroup(name string, cacheBytes int64, getter Getter, opts ...Option) *Group {
 	if getter == nil {
 		panic("nil Getter")
 	}
+
 	lock.Lock()
 	defer lock.Unlock()
+
 	g := &Group{
 		name:   name,
 		getter: getter,
@@ -45,129 +65,206 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		},
 		loader: &singleflight.Group{},
 	}
-	groups[name] = g
+
+	// 应用选项
+	for _, opt := range opts {
+		opt(g)
+	}
+
+	groups.Store(name, g)
 	return g
+}
+
+// Option 定义Group的配置选项
+type Option func(*Group)
+
+// WithExpiration 设置缓存过期时间
+func WithExpiration(d time.Duration) Option {
+	return func(g *Group) {
+		g.expiration = d
+	}
+}
+
+// WithPeers 设置分布式节点
+func WithPeers(peers PeerPicker) Option {
+	return func(g *Group) {
+		g.peers = peers
+	}
 }
 
 func GetGroup(name string) *Group {
-	lock.RLock()
-	g := groups[name]
-	lock.RUnlock()
-	return g
+	if g, ok := groups.Load(name); ok {
+		return g.(*Group)
+	}
+
+	return nil
 }
 
-func (g *Group) Get(key string) (ByteView, error) {
+// Get 从缓存获取数据
+func (g *Group) Get(ctx context.Context, key string) (ByteView, error) {
 	if key == "" {
-		return ByteView{}, fmt.Errorf("key is required")
+		return ByteView{}, errors.New("key is required")
 	}
-	return g.load(key)
-}
 
-// get from peer first, then get locally
-func (g *Group) load(key string) (ByteView, error) {
-	// make sure requests for the key only execute once in concurrent condition
-	v, err := g.loader.Do(key, func() (interface{}, error) {
-		if g.peers != nil {
-			if peer, ok, isSelf := g.peers.PickPeer(key); ok {
-				if isSelf {
-					if v, ok := g.mainCache.get(key); ok {
-						log.Println("[Geek-Cache] hit")
-						return v, nil
-					}
-				} else {
-					if value, err := g.getFromPeer(peer, key); err == nil {
-						return value, nil
-					} else {
-						log.Println("[Geek-Cache] Failed to get from peer", err)
-					}
-				}
-			}
-		}
-		return g.getLocally(key)
-	})
-
-	if err == nil {
-		return v.(ByteView), nil
-	}
-	return ByteView{}, err
-}
-
-func (g *Group) Delete(key string) (bool, error) {
-	if key == "" {
-		return true, fmt.Errorf("key is required")
-	}
-	// Peer is not set, delete from local
-	if g.peers == nil {
-		return g.mainCache.delete(key), nil
-	}
-	// The peer is set,
-	peer, ok, isSelf := g.peers.PickPeer(key)
-	if !ok {
-		return false, nil
-	}
-	if isSelf {
-		return g.mainCache.delete(key), nil
-	} else {
-		// use other server to delete the key-value
-		success, err := g.deleteFromPeer(peer, key)
-		return success, err
-	}
-}
-
-func (g *Group) getFromPeer(peer Peer, key string) (ByteView, error) {
-	bytes, err := peer.Get(g.name, key)
-	if err != nil {
-		return ByteView{}, err
-	}
-	return ByteView{
-		b: cloneBytes(bytes),
-	}, nil
-}
-
-func (g *Group) deleteFromPeer(peer Peer, key string) (bool, error) {
-	success, err := peer.Delete(g.name, key)
-	if err != nil {
-		return false, err
-	}
-	return success, nil
-}
-
-func (g *Group) getLocally(key string) (ByteView, error) {
-	// have a try again
+	// 从本地缓存获取
 	if v, ok := g.mainCache.get(key); ok {
-		log.Println("[Geek-Cache] hit")
+		logrus.Debugf("[LCache] hit local cache, group: %s, key: %s", g.name, key)
 		return v, nil
 	}
-	bytes, f, expirationTime := g.getter.Get(key)
-	if !f {
-		return ByteView{}, fmt.Errorf("data not found")
+
+	// 尝试从其他节点获取或加载
+	return g.load(ctx, key)
+}
+
+// Set 设置缓存值
+func (g *Group) Set(ctx context.Context, key string, value []byte) error {
+	if key == "" {
+		return errors.New("key is required")
 	}
-	bw := ByteView{cloneBytes(bytes)}
-	if !expirationTime.IsZero() {
-		g.mainCache.addWithExpiration(key, bw, expirationTime)
+	if len(value) == 0 {
+		return errors.New("value is required")
+	}
+
+	view := ByteView{b: cloneBytes(value)}
+	if g.expiration > 0 {
+		g.mainCache.addWithExpiration(key, view, time.Now().Add(g.expiration))
 	} else {
-		g.mainCache.add(key, bw)
+		g.mainCache.add(key, view)
 	}
-	return bw, nil
+
+	// 如果是分布式模式，同步到其他节点
+	if g.peers != nil {
+		if peer, ok, self := g.peers.PickPeer(key); ok && !self {
+			if err := peer.Set(g.name, key, value); err != nil {
+				logrus.Errorf("[LCache] failed to sync set to peer: %v", err)
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
-// Getter loads data for a key locally
-// call back when a key store missed
-// impl by user
-type Getter interface {
-	Get(key string) ([]byte, bool, time.Time)
+// Delete 删除缓存值
+func (g *Group) Delete(ctx context.Context, key string) error {
+	if key == "" {
+		return errors.New("key is required")
+	}
+
+	g.mainCache.delete(key)
+
+	// 如果是分布式模式，同步删除到其他节点
+	if g.peers != nil {
+		if peer, ok, self := g.peers.PickPeer(key); ok && !self {
+			if _, err := peer.Delete(g.name, key); err != nil {
+				logrus.Errorf("[LCache] failed to sync delete to peer: %v", err)
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
-type GetterFunc func(key string) ([]byte, bool, time.Time)
-
-func (f GetterFunc) Get(key string) ([]byte, bool, time.Time) {
-	return f(key)
+// Clear 清空缓存
+func (g *Group) Clear() {
+	g.mainCache.Clear()
 }
 
+// load 加载数据
+func (g *Group) load(ctx context.Context, key string) (value ByteView, err error) {
+	// 使用 loadGroup 确保并发请求只加载一次
+	view, err := g.loadSingle(ctx, key)
+	if err != nil {
+		return view, err
+	}
+
+	// 设置到本地缓存
+	if g.expiration > 0 {
+		g.mainCache.addWithExpiration(key, view, time.Now().Add(g.expiration))
+	} else {
+		g.mainCache.add(key, view)
+	}
+
+	return view, nil
+}
+
+// loadSingle 确保并发请求只加载一次
+func (g *Group) loadSingle(ctx context.Context, key string) (value ByteView, err error) {
+	// 检查是否已有相同的请求在处理
+	if c, ok := g.loadMap.Load(key); ok {
+		call := c.(call)
+		call.wg.Wait()
+		return ByteView{b: call.val}, call.err
+	}
+
+	// 创建新的请求
+	c := call{}
+	c.wg.Add(1)
+	g.loadMap.Store(key, c)
+	defer func() {
+		g.loadMap.Delete(key)
+	}()
+
+	// 尝试从远程节点获取
+	if g.peers != nil {
+		if peer, ok, self := g.peers.PickPeer(key); ok && !self {
+			value, err := g.getFromPeer(ctx, peer, key)
+			if err == nil {
+				c.val = value.b
+				c.err = nil
+				c.wg.Done()
+				return value, nil
+			}
+			logrus.Warnf("[LCache] failed to get from peer: %v", err)
+		}
+	}
+
+	// 从数据源加载
+	bytes, err := g.getter.Get(ctx, key)
+	if err != nil {
+		c.err = err
+		c.wg.Done()
+		return ByteView{}, err
+	}
+
+	value = ByteView{b: cloneBytes(bytes)}
+	c.val = value.b
+	c.wg.Done()
+	return value, nil
+}
+
+// getFromPeer 从其他节点获取数据
+func (g *Group) getFromPeer(ctx context.Context, peer Peer, key string) (ByteView, error) {
+	bytes, err := peer.Get(g.name, key)
+	if err != nil {
+		return ByteView{}, fmt.Errorf("failed to get from peer: %v", err)
+	}
+	return ByteView{b: bytes}, nil
+}
+
+// RegisterPeers 注册PeerPicker
+func (g *Group) RegisterPeers(peers PeerPicker) {
+	if g.peers != nil {
+		panic("RegisterPeers called more than once")
+	}
+	g.peers = peers
+}
+
+// Stats 返回缓存统计信息
+func (g *Group) Stats() map[string]interface{} {
+	return map[string]interface{}{
+		"name":       g.name,
+		"cacheSize":  g.mainCache.Len(),
+		"expiration": g.expiration,
+	}
+}
+
+// DestroyGroup 销毁指定名称的缓存组
 func DestroyGroup(name string) {
 	g := GetGroup(name)
 	if g != nil {
-		delete(groups, name)
-		log.Printf("Destroy store [%s]", name)
+		groups.Delete(name)
+		log.Printf("Destroyed cache group [%s]", name)
 	}
 }

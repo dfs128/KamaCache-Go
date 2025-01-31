@@ -13,6 +13,8 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+const defaultSvcName = "lcache"
+
 // PeerPicker 定义了peer选择器的接口
 type PeerPicker interface {
 	PickPeer(key string) (peer Peer, ok bool, self bool)

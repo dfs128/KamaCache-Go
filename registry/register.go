@@ -197,3 +197,48 @@ func (sr *ServiceRegistry) Close() error {
 	}
 	return nil
 }
+
+// Register 注册服务到etcd
+func Register(svcName, addr string, stopCh <-chan error) error {
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   DefaultConfig.Endpoints,
+		DialTimeout: DefaultConfig.DialTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	defer cli.Close()
+
+	// 创建租约
+	lease, err := cli.Grant(context.Background(), 3)
+	if err != nil {
+		return err
+	}
+
+	// 注册服务
+	key := fmt.Sprintf("%s/%s", svcName, addr)
+	_, err = cli.Put(context.Background(), key, addr, clientv3.WithLease(lease.ID))
+	if err != nil {
+		return err
+	}
+
+	// 保持租约
+	ch, err := cli.KeepAlive(context.Background(), lease.ID)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			select {
+			case <-stopCh:
+				cli.Revoke(context.Background(), lease.ID)
+				return
+			case <-ch:
+				// 租约续期成功
+			}
+		}
+	}()
+
+	return nil
+}
