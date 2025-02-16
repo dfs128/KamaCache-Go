@@ -132,9 +132,12 @@ func (s *Server) Start() error {
 	}
 
 	// 注册到etcd
+	stopCh := make(chan error)
 	go func() {
-		if err := registry.Register(s.svcName, s.addr, s.stopCh); err != nil {
+		if err := registry.Register(s.svcName, s.addr, stopCh); err != nil {
 			logrus.Errorf("failed to register service: %v", err)
+			close(stopCh)
+			return
 		}
 	}()
 
@@ -171,6 +174,12 @@ func (s *Server) Set(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, 
 	group := GetGroup(req.Group)
 	if group == nil {
 		return nil, fmt.Errorf("group %s not found", req.Group)
+	}
+
+	// 从 context 中获取标记，如果没有则创建新的 context
+	fromPeer := ctx.Value("from_peer")
+	if fromPeer == nil {
+		ctx = context.WithValue(ctx, "from_peer", true)
 	}
 
 	if err := group.Set(ctx, req.Key, req.Value); err != nil {

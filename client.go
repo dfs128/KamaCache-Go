@@ -6,10 +6,10 @@ import (
 	"time"
 
 	pb "github.com/juguagua/lcache/pb"
-	"github.com/juguagua/lcache/registry"
 	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
@@ -26,7 +26,7 @@ func NewClient(addr string, svcName string, etcdCli *clientv3.Client) (*Client, 
 	var err error
 	if etcdCli == nil {
 		etcdCli, err = clientv3.New(clientv3.Config{
-			Endpoints:   []string{"localhost:2379"}, // TODO 连接可配置
+			Endpoints:   []string{"localhost:2379"},
 			DialTimeout: 5 * time.Second,
 		})
 		if err != nil {
@@ -34,10 +34,16 @@ func NewClient(addr string, svcName string, etcdCli *clientv3.Client) (*Client, 
 		}
 	}
 
-	conn, err := registry.EtcdDial(etcdCli, svcName, addr)
+	conn, err := grpc.Dial(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial etcd: %v", err)
+		return nil, fmt.Errorf("failed to dial server: %v", err)
 	}
+
 	grpcClient := pb.NewLCacheClient(conn)
 
 	client := &Client{
@@ -81,10 +87,7 @@ func (c *Client) Delete(group, key string) (bool, error) {
 	return resp.GetValue(), nil
 }
 
-func (c *Client) Set(group, key string, value []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
+func (c *Client) Set(ctx context.Context, group, key string, value []byte) error {
 	resp, err := c.grpcCli.Set(ctx, &pb.Request{
 		Group: group,
 		Key:   key,
@@ -94,6 +97,7 @@ func (c *Client) Set(group, key string, value []byte) error {
 		return fmt.Errorf("failed to set value to lcache: %v", err)
 	}
 	logrus.Infof("grpc set request resp: %+v", resp)
+
 	return nil
 }
 

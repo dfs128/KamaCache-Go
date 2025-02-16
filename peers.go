@@ -3,6 +3,7 @@ package lcache
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -24,7 +25,7 @@ type PeerPicker interface {
 // Peer 定义了缓存节点的接口
 type Peer interface {
 	Get(group string, key string) ([]byte, error)
-	Set(group string, key string, value []byte) error
+	Set(ctx context.Context, group string, key string, value []byte) error
 	Delete(group string, key string) (bool, error)
 	Close() error
 }
@@ -48,6 +49,17 @@ type PickerOption func(*ClientPicker)
 func WithServiceName(name string) PickerOption {
 	return func(p *ClientPicker) {
 		p.svcName = name
+	}
+}
+
+// PrintPeers 打印当前已发现的节点（仅用于调试）
+func (p *ClientPicker) PrintPeers() {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	log.Printf("当前已发现的节点:")
+	for addr := range p.clients {
+		log.Printf("- %s", addr)
 	}
 }
 
@@ -102,7 +114,7 @@ func (p *ClientPicker) startServiceDiscovery() error {
 // watchServiceChanges 监听服务实例变化
 func (p *ClientPicker) watchServiceChanges() {
 	watcher := clientv3.NewWatcher(p.etcdCli)
-	watchChan := watcher.Watch(p.ctx, p.svcName, clientv3.WithPrefix())
+	watchChan := watcher.Watch(p.ctx, "/services/"+p.svcName, clientv3.WithPrefix())
 
 	for {
 		select {
@@ -121,7 +133,7 @@ func (p *ClientPicker) handleWatchEvents(events []*clientv3.Event) {
 	defer p.mu.Unlock()
 
 	for _, event := range events {
-		addr := parseAddrFromKey(string(event.Kv.Key), p.svcName)
+		addr := string(event.Kv.Value)
 		if addr == p.selfAddr {
 			continue
 		}
@@ -130,11 +142,13 @@ func (p *ClientPicker) handleWatchEvents(events []*clientv3.Event) {
 		case clientv3.EventTypePut:
 			if _, exists := p.clients[addr]; !exists {
 				p.set(addr)
+				logrus.Infof("New service discovered at %s", addr)
 			}
 		case clientv3.EventTypeDelete:
 			if client, exists := p.clients[addr]; exists {
 				client.Close()
 				p.remove(addr)
+				logrus.Infof("Service removed at %s", addr)
 			}
 		}
 	}
@@ -145,7 +159,7 @@ func (p *ClientPicker) fetchAllServices() error {
 	ctx, cancel := context.WithTimeout(p.ctx, 3*time.Second)
 	defer cancel()
 
-	resp, err := p.etcdCli.Get(ctx, p.svcName, clientv3.WithPrefix())
+	resp, err := p.etcdCli.Get(ctx, "/services/"+p.svcName, clientv3.WithPrefix())
 	if err != nil {
 		return fmt.Errorf("failed to get all services: %v", err)
 	}
@@ -154,9 +168,10 @@ func (p *ClientPicker) fetchAllServices() error {
 	defer p.mu.Unlock()
 
 	for _, kv := range resp.Kvs {
-		addr := parseAddrFromKey(string(kv.Key), p.svcName)
+		addr := string(kv.Value)
 		if addr != "" && addr != p.selfAddr {
 			p.set(addr)
+			logrus.Infof("Discovered service at %s", addr)
 		}
 	}
 	return nil
@@ -167,8 +182,9 @@ func (p *ClientPicker) set(addr string) {
 	if client, err := NewClient(addr, p.svcName, p.etcdCli); err == nil {
 		p.consHash.Add(addr)
 		p.clients[addr] = client
+		logrus.Infof("Successfully created client for %s", addr)
 	} else {
-		logrus.Errorf("failed to create client for %s: %v", addr, err)
+		logrus.Errorf("Failed to create client for %s: %v", addr, err)
 	}
 }
 
@@ -216,9 +232,9 @@ func (p *ClientPicker) Close() error {
 
 // parseAddrFromKey 从etcd key中解析地址
 func parseAddrFromKey(key, svcName string) string {
-	idx := strings.Index(key, svcName)
-	if idx == -1 {
-		return ""
+	prefix := fmt.Sprintf("/services/%s/", svcName)
+	if strings.HasPrefix(key, prefix) {
+		return strings.TrimPrefix(key, prefix)
 	}
-	return key[idx+len(svcName)+1:]
+	return ""
 }

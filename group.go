@@ -125,6 +125,19 @@ func (g *Group) Set(ctx context.Context, key string, value []byte) error {
 		return errors.New("value is required")
 	}
 
+	// 检查是否是从其他节点同步过来的请求
+	if ctx.Value("from_peer") != nil {
+		// 如果是从其他节点同步来的，只更新本地缓存，不再向其他节点同步
+		view := ByteView{b: cloneBytes(value)}
+		if g.expiration > 0 {
+			g.mainCache.addWithExpiration(key, view, time.Now().Add(g.expiration))
+		} else {
+			g.mainCache.add(key, view)
+		}
+		return nil
+	}
+
+	// 本地发起的请求，需要同步到其他节点
 	view := ByteView{b: cloneBytes(value)}
 	if g.expiration > 0 {
 		g.mainCache.addWithExpiration(key, view, time.Now().Add(g.expiration))
@@ -135,10 +148,12 @@ func (g *Group) Set(ctx context.Context, key string, value []byte) error {
 	// 如果是分布式模式，同步到其他节点
 	if g.peers != nil {
 		if peer, ok, self := g.peers.PickPeer(key); ok && !self {
-			if err := peer.Set(g.name, key, value); err != nil {
-				logrus.Errorf("[LCache] failed to sync set to peer: %v", err)
-				return err
-			}
+			go func() {
+				ctx := context.WithValue(context.Background(), "from_peer", true)
+				if err := peer.Set(ctx, g.name, key, value); err != nil {
+					logrus.Errorf("[LCache] failed to sync set to peer: %v", err)
+				}
+			}()
 		}
 	}
 

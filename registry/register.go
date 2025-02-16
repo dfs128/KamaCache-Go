@@ -54,22 +54,11 @@ func NewServiceRegistry(cfg *Config) (*ServiceRegistry, error) {
 
 // EtcdDial 从 etcd 集群选择一个实例与其建立 grpc 连接
 func EtcdDial(c *clientv3.Client, service, target string) (*grpc.ClientConn, error) {
-	em, err := endpoints.NewManager(c, service)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create endpoint manager: %v", err)
-	}
-
-	// 创建 etcd resolver builder
-	builder := &etcdResolverBuilder{
-		client:  c,
-		manager: em,
-	}
-	resolver.Register(builder)
-
-	// 使用 grpc.NewClient 建立连接
-	return grpc.NewClient(
-		fmt.Sprintf("etcd:///%s/%s", service, target),
+	// 直接使用 grpc.Dial
+	return grpc.Dial(target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(3*time.Second),
 	)
 }
 
@@ -205,40 +194,52 @@ func Register(svcName, addr string, stopCh <-chan error) error {
 		DialTimeout: DefaultConfig.DialTimeout,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create etcd client: %v", err)
 	}
-	defer cli.Close()
 
 	// 创建租约
-	lease, err := cli.Grant(context.Background(), 3)
+	lease, err := cli.Grant(context.Background(), 10) // 增加租约时间到10秒
 	if err != nil {
-		return err
+		cli.Close()
+		return fmt.Errorf("failed to create lease: %v", err)
 	}
 
-	// 注册服务
-	key := fmt.Sprintf("%s/%s", svcName, addr)
+	// 注册服务，使用完整的key路径
+	key := fmt.Sprintf("/services/%s/%s", svcName, addr)
 	_, err = cli.Put(context.Background(), key, addr, clientv3.WithLease(lease.ID))
 	if err != nil {
-		return err
+		cli.Close()
+		return fmt.Errorf("failed to put key-value to etcd: %v", err)
 	}
 
 	// 保持租约
-	ch, err := cli.KeepAlive(context.Background(), lease.ID)
+	keepAliveCh, err := cli.KeepAlive(context.Background(), lease.ID)
 	if err != nil {
-		return err
+		cli.Close()
+		return fmt.Errorf("failed to keep lease alive: %v", err)
 	}
 
+	// 处理租约续期和服务注销
 	go func() {
+		defer cli.Close()
 		for {
 			select {
 			case <-stopCh:
-				cli.Revoke(context.Background(), lease.ID)
+				// 服务注销，撤销租约
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				cli.Revoke(ctx, lease.ID)
+				cancel()
 				return
-			case <-ch:
-				// 租约续期成功
+			case resp, ok := <-keepAliveCh:
+				if !ok {
+					logrus.Warn("keep alive channel closed")
+					return
+				}
+				logrus.Debugf("successfully renewed lease: %d", resp.ID)
 			}
 		}
 	}()
 
+	logrus.Infof("Service registered: %s at %s", svcName, addr)
 	return nil
 }
