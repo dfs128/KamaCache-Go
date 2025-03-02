@@ -16,6 +16,7 @@ type lruCache struct {
 	usedBytes       int64
 	onEvicted       func(key string, value Value)
 	cleanupInterval time.Duration
+	cleanupTicker   *time.Ticker
 }
 
 type lruEntry struct {
@@ -38,6 +39,7 @@ func newLRUCache(opts Options) *lruCache {
 		c.cleanupInterval = time.Minute // 默认清理间隔
 	}
 
+	c.cleanupTicker = time.NewTicker(c.cleanupInterval)
 	go c.cleanupLoop()
 	return c
 }
@@ -158,5 +160,12 @@ func (c *lruCache) cleanupLoop() {
 		c.mu.Lock()
 		c.evict()
 		c.mu.Unlock()
+	}
+}
+
+// Close 关闭相关资源
+func (c *lruCache) Close() {
+	if c.cleanupTicker != nil {
+		c.cleanupTicker.Stop()
 	}
 }

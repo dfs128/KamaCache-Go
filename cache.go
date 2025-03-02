@@ -7,36 +7,50 @@ import (
 	"github.com/juguagua/lcache/store"
 )
 
-type cache struct {
-	lock       sync.RWMutex
-	c          store.Store
-	cacheBytes int64 // 最大缓存大小
+type Cache struct {
+	lock sync.RWMutex
+	c    store.Store
+	opts CacheOptions
+}
+
+type CacheOptions struct {
+	CacheType    store.CacheType
+	MaxBytes     int64
+	BucketCount  uint16 // 缓存桶数量
+	CapPerBucket uint16 // 每个缓存桶的容量
+	Level2Cap    uint16 // 二级缓存桶的容量
+	CleanupTime  time.Duration
+	OnEvicted    func(key string, value store.Value)
+}
+
+func NewCache(opts CacheOptions) *Cache {
+	return &Cache{
+		opts: opts,
+	}
 }
 
 // lruCacheLazyLoadIfNeed 在需要时初始化缓存
-func (cache *cache) lazyLoadIfNeed() {
+func (cache *Cache) lazyLoadIfNeed() {
 	if cache.c == nil {
 		cache.lock.Lock()
 		defer cache.lock.Unlock()
 		if cache.c == nil {
-			// 使用 Store 接口初始化缓存，通过配置来选择具体策略
-			cache.c = store.NewStore(store.LRU, store.Options{
-				MaxBytes: cache.cacheBytes,
-			})
+			opts := store.NewOptions()
+			cache.c = store.NewStore(cache.opts.CacheType, opts)
 		}
 	}
 }
 
-// add 向缓存中添加一个 key-value 对
-func (cache *cache) add(key string, value ByteView) {
+// Add 向缓存中添加一个 key-value 对
+func (cache *Cache) Add(key string, value ByteView) {
 	// 延迟加载缓存
 	cache.lazyLoadIfNeed()
 	// 调用 Store 接口的 Set 方法
 	cache.c.Set(key, value)
 }
 
-// get 从缓存中获取值
-func (cache *cache) get(key string) (value ByteView, ok bool) {
+// Get 从缓存中获取值
+func (cache *Cache) get(key string) (value ByteView, ok bool) {
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 	if cache.c == nil {
@@ -49,8 +63,8 @@ func (cache *cache) get(key string) (value ByteView, ok bool) {
 	return
 }
 
-// addWithExpiration 向缓存中添加一个带过期时间的 key-value 对
-func (cache *cache) addWithExpiration(key string, value ByteView, expirationTime time.Time) {
+// AddWithExpiration 向缓存中添加一个带过期时间的 key-value 对
+func (cache *Cache) AddWithExpiration(key string, value ByteView, expirationTime time.Time) {
 	// 延迟加载缓存
 	cache.lazyLoadIfNeed()
 	// 调用 Store 接口的 SetWithExpiration 方法
@@ -58,7 +72,7 @@ func (cache *cache) addWithExpiration(key string, value ByteView, expirationTime
 }
 
 // delete 从缓存中删除一个 key
-func (cache *cache) delete(key string) bool {
+func (cache *Cache) Delete(key string) bool {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 	if cache.c == nil {
@@ -69,7 +83,7 @@ func (cache *cache) delete(key string) bool {
 }
 
 // Clear 清空缓存
-func (cache *cache) Clear() {
+func (cache *Cache) Clear() {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 	if cache.c != nil {
@@ -79,7 +93,7 @@ func (cache *cache) Clear() {
 }
 
 // Len 返回缓存的当前存储量
-func (cache *cache) Len() int {
+func (cache *Cache) Len() int {
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 	if cache.c == nil {
@@ -87,4 +101,15 @@ func (cache *cache) Len() int {
 	}
 	// 调用 Store 接口的 Len 方法
 	return cache.c.Len()
+}
+
+// Close 关闭缓存，释放资源
+func (cache *Cache) Close() {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+
+	if closer, ok := cache.c.(interface{ Close() }); ok && closer != nil {
+		closer.Close()
+	}
+	cache.c = nil
 }
