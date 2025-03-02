@@ -37,7 +37,7 @@ func NewClient(addr string, svcName string, etcdCli *clientv3.Client) (*Client, 
 	conn, err := grpc.Dial(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
+		grpc.WithTimeout(10*time.Second),
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 	)
 	if err != nil {

@@ -15,6 +15,7 @@ type Store interface {
 	Delete(key string) bool
 	Clear()
 	Len() int
+	Close()
 }
 
 // CacheType 缓存类型
@@ -27,17 +28,17 @@ const (
 
 // Options 通用缓存配置选项
 type Options struct {
-	MaxBytes        int64  // 最大的缓存字节数
-	BucketCount     uint16 // 缓存的桶数量
-	CapPerBucket    uint16 // 每个桶的容量
-	Level2Cap       uint16 // lru-2 中二级缓存的容量
+	MaxBytes        int64  // 最大的缓存字节数（用于 lru）
+	BucketCount     uint16 // 缓存的桶数量（用于 lru-2）
+	CapPerBucket    uint16 // 每个桶的容量（用于 lru-2）
+	Level2Cap       uint16 // lru-2 中二级缓存的容量（用于 lru-2）
 	CleanupInterval time.Duration
 	OnEvicted       func(key string, value Value)
 }
 
 func NewOptions() Options {
 	return Options{
-		//MaxBytes:        8192,
+		MaxBytes:        8192,
 		BucketCount:     16,
 		CapPerBucket:    512,
 		Level2Cap:       256,
@@ -51,6 +52,8 @@ func NewStore(cacheType CacheType, opts Options) Store {
 	switch cacheType {
 	case LRU2:
 		return newLRU2Cache(opts)
+	case LRU:
+		return newLRUCache(opts)
 	default:
 		return newLRUCache(opts)
 	}

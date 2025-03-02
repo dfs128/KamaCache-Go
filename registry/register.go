@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -197,6 +198,15 @@ func Register(svcName, addr string, stopCh <-chan error) error {
 		return fmt.Errorf("failed to create etcd client: %v", err)
 	}
 
+	localIP, err := getLocalIP()
+	if err != nil {
+		cli.Close()
+		return fmt.Errorf("failed to get local IP: %v", err)
+	}
+	if addr[0] == ':' {
+		addr = fmt.Sprintf("%s%s", localIP, addr)
+	}
+
 	// 创建租约
 	lease, err := cli.Grant(context.Background(), 10) // 增加租约时间到10秒
 	if err != nil {
@@ -242,4 +252,21 @@ func Register(svcName, addr string, stopCh <-chan error) error {
 
 	logrus.Infof("Service registered: %s at %s", svcName, addr)
 	return nil
+}
+
+func getLocalIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+			if ipNet.IP.To4() != nil {
+				return ipNet.IP.String(), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no valid local IP found")
 }
