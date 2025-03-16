@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,7 +11,6 @@ type lru2Store struct {
 	locks       []sync.Mutex
 	caches      [][2]*cache
 	onEvicted   func(key string, value Value)
-	expirations sync.Map
 	cleanupTick *time.Ticker
 	mask        int32
 }
@@ -20,10 +20,10 @@ func newLRU2Cache(opts Options) *lru2Store {
 		opts.BucketCount = 16
 	}
 	if opts.CapPerBucket == 0 {
-		opts.CapPerBucket = 128
+		opts.CapPerBucket = 1024
 	}
 	if opts.Level2Cap == 0 {
-		opts.Level2Cap = 64
+		opts.Level2Cap = 1024
 	}
 	if opts.CleanupInterval <= 0 {
 		opts.CleanupInterval = time.Minute
@@ -39,8 +39,8 @@ func newLRU2Cache(opts Options) *lru2Store {
 	}
 
 	for i := range s.caches {
-		s.caches[i][0] = create(opts.CapPerBucket)
-		s.caches[i][1] = create(opts.Level2Cap)
+		s.caches[i][0] = Create(opts.CapPerBucket)
+		s.caches[i][1] = Create(opts.Level2Cap)
 	}
 
 	if opts.CleanupInterval > 0 {
@@ -55,43 +55,51 @@ func (s *lru2Store) Get(key string) (Value, bool) {
 	s.locks[idx].Lock()
 	defer s.locks[idx].Unlock()
 
-	if s.isExpired(key) {
-		s.delete(key, idx)
-		return nil, false
+	currentTime := Now()
+
+	// 首先检查一级缓存
+	n1, status1, expireAt := s.caches[idx][0].del(key)
+	if status1 > 0 {
+		// 从一级缓存找到项目
+		if expireAt > 0 && currentTime >= expireAt {
+			// 项目已过期，删除它
+			s.delete(key, idx)
+			fmt.Println("找到项目已过期，删除它")
+			return nil, false
+		}
+
+		// 项目有效，将其移至二级缓存
+		s.caches[idx][1].put(key, n1.v, expireAt, s.onEvicted)
+		fmt.Println("项目有效，将其移至二级缓存")
+		return n1.v, true
 	}
 
-	n, status := (*node)(nil), 0
+	// 一级缓存未找到，检查二级缓存
+	n2, status2 := s._get(key, idx, 1)
+	if status2 > 0 && n2 != nil {
+		if n2.expireAt > 0 && currentTime >= n2.expireAt {
+			// 项目已过期，删除它
+			s.delete(key, idx)
+			fmt.Println("找到项目已过期，删除它")
+			return nil, false
+		}
 
-	var expireAt int64
-	// 从一级缓存中删除项，如果找到则移至二级缓存
-	if n, status, expireAt = s.caches[idx][0].del(key); status <= 0 {
-		// 在二级缓存中查找
-		n, status = s._get(key, idx, 1)
-	} else {
-		// 从一级缓存中找到项，将其移至二级缓存
-		s.caches[idx][1].put(key, n.v, expireAt, s.onEvicted)
+		return n2.v, true
 	}
 
-	if status <= 0 || n == nil || n.expireAt <= 0 || (n.expireAt > 0 && now() >= n.expireAt) {
-		return nil, false
-	}
-
-	return n.v, true
+	return nil, false
 }
 
 func (s *lru2Store) Set(key string, value Value) error {
-	return s.SetWithExpiration(key, value, 0)
+	return s.SetWithExpiration(key, value, 9999999999999999)
 }
 
-// SetWithExpiration 实现Store接口
 func (s *lru2Store) SetWithExpiration(key string, value Value, expiration time.Duration) error {
-	// 计算过期时间
+	// 计算过期时间 - 确保单位一致
 	expireAt := int64(0)
 	if expiration > 0 {
-		expireAt = now() + int64(expiration)
-		s.expirations.Store(key, time.Now().Add(expiration))
-	} else {
-		s.expirations.Delete(key)
+		// now() 返回纳秒时间戳，确保 expiration 也是纳秒单位
+		expireAt = Now() + int64(expiration.Nanoseconds())
 	}
 
 	idx := hashBKRD(key) & s.mask
@@ -142,7 +150,7 @@ func (s *lru2Store) Clear() {
 		s.Delete(key)
 	}
 
-	s.expirations = sync.Map{}
+	//s.expirations = sync.Map{}
 }
 
 // Len 实现Store接口
@@ -178,7 +186,7 @@ func (s *lru2Store) Close() {
 var clock, p, n = time.Now().UnixNano(), uint16(0), uint16(1)
 
 // 返回 clock 变量的当前值。atomic.LoadInt64 是原子操作，用于保证在多线程/协程环境中安全地读取 clock 变量的值
-func now() int64 { return atomic.LoadInt64(&clock) }
+func Now() int64 { return atomic.LoadInt64(&clock) }
 
 func init() {
 	go func() {
@@ -193,6 +201,7 @@ func init() {
 	}()
 }
 
+// 实现了 BKDR 哈希算法，用于计算键的哈希值
 func hashBKRD(s string) (hash int32) {
 	for i := 0; i < len(s); i++ {
 		hash = hash*131 + int32(s[i])
@@ -230,7 +239,7 @@ type cache struct {
 	last uint16            // 最后一个节点元素的索引
 }
 
-func create(cap uint16) *cache {
+func Create(cap uint16) *cache {
 	return &cache{
 		dlnk: make([][2]uint16, cap+1),
 		m:    make([]node, cap),
@@ -322,7 +331,12 @@ func (c *cache) adjust(idx, f, t uint16) {
 }
 
 func (s *lru2Store) _get(key string, idx, level int32) (*node, int) {
-	if n, st := s.caches[idx][level].get(key); st > 0 && n.expireAt > 0 && now() < n.expireAt {
+	if n, st := s.caches[idx][level].get(key); st > 0 && n != nil {
+		currentTime := Now()
+		if n.expireAt <= 0 || currentTime >= n.expireAt {
+			// 过期或已删除
+			return nil, 0
+		}
 		return n, st
 	}
 
@@ -343,37 +357,47 @@ func (s *lru2Store) delete(key string, idx int32) bool {
 	}
 
 	if deleted {
-		s.expirations.Delete(key)
+		//s.expirations.Delete(key)
 	}
 
 	return deleted
 }
 
-// cleanupLoop 定期清理过期缓存
 func (s *lru2Store) cleanupLoop() {
 	for range s.cleanupTick.C {
-		var expiredKeys []string
+		currentTime := Now()
 
-		s.expirations.Range(func(key, expireTime any) bool {
-			if time.Now().After(expireTime.(time.Time)) {
-				expiredKeys = append(expiredKeys, key.(string))
+		for i := range s.caches {
+			s.locks[i].Lock()
+
+			// 检查并清理过期项目
+			var expiredKeys []string
+
+			s.caches[i][0].walk(func(key string, value Value, expireAt int64) bool {
+				if expireAt > 0 && currentTime >= expireAt {
+					expiredKeys = append(expiredKeys, key)
+				}
+				return true
+			})
+
+			s.caches[i][1].walk(func(key string, value Value, expireAt int64) bool {
+				if expireAt > 0 && currentTime >= expireAt {
+					for _, k := range expiredKeys {
+						if key == k {
+							// 避免重复
+							return true
+						}
+					}
+					expiredKeys = append(expiredKeys, key)
+				}
+				return true
+			})
+
+			for _, key := range expiredKeys {
+				s.delete(key, int32(i))
 			}
-			return true
-		})
 
-		for _, key := range expiredKeys {
-			s.Delete(key)
+			s.locks[i].Unlock()
 		}
 	}
-}
-
-// 检查键是否过期
-func (s *lru2Store) isExpired(key string) bool {
-	if expireTime, ok := s.expirations.Load(key); ok {
-		if time.Now().After(expireTime.(time.Time)) {
-			return true
-		}
-	}
-
-	return false
 }

@@ -79,6 +79,12 @@ func main() {
 
 	// 测试获取本地数据
 	fmt.Printf("\n=== 节点%s：获取本地数据 ===\n", *nodeID)
+	fmt.Printf("直接查询本地缓存...\n")
+
+	// 打印缓存统计信息
+	stats := group.Stats()
+	fmt.Printf("缓存统计: %+v\n", stats)
+	
 	if val, err := group.Get(ctx, localKey); err == nil {
 		fmt.Printf("节点%s: 获取本地键 %s 成功: %s\n", *nodeID, localKey, val.String())
 	} else {

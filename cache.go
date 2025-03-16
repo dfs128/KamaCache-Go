@@ -80,7 +80,7 @@ func (c *Cache) ensureInitialized() {
 		// 标记为已初始化
 		atomic.StoreInt32(&c.initialized, 1)
 
-		logrus.Debugf("Cache initialized with type %s, max bytes: %d", c.opts.CacheType, c.opts.MaxBytes)
+		logrus.Infof("Cache initialized with type %s, max bytes: %d", c.opts.CacheType, c.opts.MaxBytes)
 	}
 }
 
@@ -128,7 +128,7 @@ func (c *Cache) Get(ctx context.Context, key string) (value ByteView, ok bool) {
 		return bv, true
 	}
 
-	// 类型断言失败，记录警告
+	// 类型断言失败
 	logrus.Warnf("Type assertion failed for key %s, expected ByteView", key)
 	atomic.AddInt64(&c.misses, 1)
 	return ByteView{}, false
