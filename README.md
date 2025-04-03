@@ -27,7 +27,7 @@
 
 ### 1. 安装
 ```bash
-go get github.com/juguagua/kamacache
+go get github.com/youngyangyang04/KamaCache-Go
 ```
 
 ### 2. 启动 etcd
