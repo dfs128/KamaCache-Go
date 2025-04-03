@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juguagua/lc-cache/consistenthash"
+	"github.com/juguagua/lcache/consistenthash"
 	"github.com/juguagua/lcache/registry"
 	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"

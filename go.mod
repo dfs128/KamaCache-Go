@@ -1,12 +1,11 @@
-module github.com/juguagua/lcache
+module github.com/youngyangyang04/KamaCache-Go
+
 
 go 1.22
 
 toolchain go1.22.11
 
 require (
-	github.com/juguagua/lc-cache v0.0.0-20250125130440-44ca965c1836
-	github.com/orca-zhang/ecache v1.1.1
 	github.com/sirupsen/logrus v1.9.3
 	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.4

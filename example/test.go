@@ -20,7 +20,7 @@ func main() {
 	log.Printf("[节点%s] 启动，地址: %s", *nodeID, addr)
 
 	// 创建节点
-	node, err := lcache.NewServer(addr, "lcache",
+	node, err := lcache.NewServer(addr, "kama-cache",
 		lcache.WithEtcdEndpoints([]string{"localhost:2379"}),
 		lcache.WithDialTimeout(5*time.Second),
 	)
@@ -84,7 +84,7 @@ func main() {
 	// 打印缓存统计信息
 	stats := group.Stats()
 	fmt.Printf("缓存统计: %+v\n", stats)
-	
+
 	if val, err := group.Get(ctx, localKey); err == nil {
 		fmt.Printf("节点%s: 获取本地键 %s 成功: %s\n", *nodeID, localKey, val.String())
 	} else {
