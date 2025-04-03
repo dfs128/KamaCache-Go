@@ -1,4 +1,4 @@
-package lcache
+package kamacache
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 
 	"crypto/tls"
 
-	pb "github.com/juguagua/lcache/pb"
-	"github.com/juguagua/lcache/registry"
 	"github.com/sirupsen/logrus"
+	pb "github.com/youngyangyang04/KamaCache-Go/pb"
+	"github.com/youngyangyang04/KamaCache-Go/registry"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -21,7 +21,7 @@ import (
 
 // Server 定义缓存服务器
 type Server struct {
-	pb.UnimplementedLCacheServer
+	pb.UnimplementedKamaCacheServer
 	addr       string           // 服务地址
 	svcName    string           // 服务名称
 	groups     *sync.Map        // 缓存组
@@ -113,7 +113,7 @@ func NewServer(addr, svcName string, opts ...ServerOption) (*Server, error) {
 	}
 
 	// 注册服务
-	pb.RegisterLCacheServer(srv.grpcServer, srv)
+	pb.RegisterKamaCacheServer(srv.grpcServer, srv)
 
 	// 注册健康检查服务
 	healthServer := health.NewServer()
@@ -154,7 +154,7 @@ func (s *Server) Stop() {
 	}
 }
 
-// Get 实现LCache服务的Get方法
+// Get 实现Cache服务的Get方法
 func (s *Server) Get(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, error) {
 	group := GetGroup(req.Group)
 	if group == nil {
@@ -169,7 +169,7 @@ func (s *Server) Get(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, 
 	return &pb.ResponseForGet{Value: view.ByteSLice()}, nil
 }
 
-// Set 实现LCache服务的Set方法
+// Set 实现Cache服务的Set方法
 func (s *Server) Set(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, error) {
 	group := GetGroup(req.Group)
 	if group == nil {
@@ -189,7 +189,7 @@ func (s *Server) Set(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, 
 	return &pb.ResponseForGet{Value: req.Value}, nil
 }
 
-// Delete 实现LCache服务的Delete方法
+// Delete 实现Cache服务的Delete方法
 func (s *Server) Delete(ctx context.Context, req *pb.Request) (*pb.ResponseForDelete, error) {
 	group := GetGroup(req.Group)
 	if group == nil {

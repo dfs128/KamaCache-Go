@@ -1,4 +1,4 @@
-package lcache
+package kamacache
 
 // ByteView 只读的字节视图，用于缓存数据
 type ByteView struct {

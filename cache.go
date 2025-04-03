@@ -1,12 +1,12 @@
-package lcache
+package kamacache
 
 import (
 	"context"
+	"github.com/youngyangyang04/KamaCache-Go/store"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/juguagua/lcache/store"
 	"github.com/sirupsen/logrus"
 )
 

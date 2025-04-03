@@ -1,4 +1,4 @@
-package lcache
+package kamacache
 
 import (
 	"context"
@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juguagua/lcache/consistenthash"
-	"github.com/juguagua/lcache/registry"
 	"github.com/sirupsen/logrus"
+	"github.com/youngyangyang04/KamaCache-Go/consistenthash"
+	"github.com/youngyangyang04/KamaCache-Go/registry"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-const defaultSvcName = "lcache"
+const defaultSvcName = "KamaCache"
 
 // PeerPicker 定义了peer选择器的接口
 type PeerPicker interface {

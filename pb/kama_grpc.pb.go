@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: lcache.proto
+// source: pb/kama.proto
 
 package __
 
@@ -19,179 +19,179 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LCache_Get_FullMethodName    = "/pb.LCache/Get"
-	LCache_Set_FullMethodName    = "/pb.LCache/Set"
-	LCache_Delete_FullMethodName = "/pb.LCache/Delete"
+	KamaCache_Get_FullMethodName    = "/pb.KamaCache/Get"
+	KamaCache_Set_FullMethodName    = "/pb.KamaCache/Set"
+	KamaCache_Delete_FullMethodName = "/pb.KamaCache/Delete"
 )
 
-// LCacheClient is the client API for LCache service.
+// KamaCacheClient is the client API for KamaCache service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type LCacheClient interface {
+type KamaCacheClient interface {
 	Get(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error)
 	Set(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error)
 	Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error)
 }
 
-type lCacheClient struct {
+type kamaCacheClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewLCacheClient(cc grpc.ClientConnInterface) LCacheClient {
-	return &lCacheClient{cc}
+func NewKamaCacheClient(cc grpc.ClientConnInterface) KamaCacheClient {
+	return &kamaCacheClient{cc}
 }
 
-func (c *lCacheClient) Get(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error) {
+func (c *kamaCacheClient) Get(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResponseForGet)
-	err := c.cc.Invoke(ctx, LCache_Get_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, KamaCache_Get_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *lCacheClient) Set(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error) {
+func (c *kamaCacheClient) Set(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForGet, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResponseForGet)
-	err := c.cc.Invoke(ctx, LCache_Set_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, KamaCache_Set_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *lCacheClient) Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error) {
+func (c *kamaCacheClient) Delete(ctx context.Context, in *Request, opts ...grpc.CallOption) (*ResponseForDelete, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResponseForDelete)
-	err := c.cc.Invoke(ctx, LCache_Delete_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, KamaCache_Delete_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// LCacheServer is the server API for LCache service.
-// All implementations must embed UnimplementedLCacheServer
+// KamaCacheServer is the server API for KamaCache service.
+// All implementations must embed UnimplementedKamaCacheServer
 // for forward compatibility.
-type LCacheServer interface {
+type KamaCacheServer interface {
 	Get(context.Context, *Request) (*ResponseForGet, error)
 	Set(context.Context, *Request) (*ResponseForGet, error)
 	Delete(context.Context, *Request) (*ResponseForDelete, error)
-	mustEmbedUnimplementedLCacheServer()
+	mustEmbedUnimplementedKamaCacheServer()
 }
 
-// UnimplementedLCacheServer must be embedded to have
+// UnimplementedKamaCacheServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedLCacheServer struct{}
+type UnimplementedKamaCacheServer struct{}
 
-func (UnimplementedLCacheServer) Get(context.Context, *Request) (*ResponseForGet, error) {
+func (UnimplementedKamaCacheServer) Get(context.Context, *Request) (*ResponseForGet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedLCacheServer) Set(context.Context, *Request) (*ResponseForGet, error) {
+func (UnimplementedKamaCacheServer) Set(context.Context, *Request) (*ResponseForGet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Set not implemented")
 }
-func (UnimplementedLCacheServer) Delete(context.Context, *Request) (*ResponseForDelete, error) {
+func (UnimplementedKamaCacheServer) Delete(context.Context, *Request) (*ResponseForDelete, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
-func (UnimplementedLCacheServer) mustEmbedUnimplementedLCacheServer() {}
-func (UnimplementedLCacheServer) testEmbeddedByValue()                {}
+func (UnimplementedKamaCacheServer) mustEmbedUnimplementedKamaCacheServer() {}
+func (UnimplementedKamaCacheServer) testEmbeddedByValue()                   {}
 
-// UnsafeLCacheServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to LCacheServer will
+// UnsafeKamaCacheServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to KamaCacheServer will
 // result in compilation errors.
-type UnsafeLCacheServer interface {
-	mustEmbedUnimplementedLCacheServer()
+type UnsafeKamaCacheServer interface {
+	mustEmbedUnimplementedKamaCacheServer()
 }
 
-func RegisterLCacheServer(s grpc.ServiceRegistrar, srv LCacheServer) {
-	// If the following call pancis, it indicates UnimplementedLCacheServer was
+func RegisterKamaCacheServer(s grpc.ServiceRegistrar, srv KamaCacheServer) {
+	// If the following call pancis, it indicates UnimplementedKamaCacheServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&LCache_ServiceDesc, srv)
+	s.RegisterService(&KamaCache_ServiceDesc, srv)
 }
 
-func _LCache_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _KamaCache_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LCacheServer).Get(ctx, in)
+		return srv.(KamaCacheServer).Get(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: LCache_Get_FullMethodName,
+		FullMethod: KamaCache_Get_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LCacheServer).Get(ctx, req.(*Request))
+		return srv.(KamaCacheServer).Get(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _LCache_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _KamaCache_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LCacheServer).Set(ctx, in)
+		return srv.(KamaCacheServer).Set(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: LCache_Set_FullMethodName,
+		FullMethod: KamaCache_Set_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LCacheServer).Set(ctx, req.(*Request))
+		return srv.(KamaCacheServer).Set(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _LCache_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _KamaCache_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LCacheServer).Delete(ctx, in)
+		return srv.(KamaCacheServer).Delete(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: LCache_Delete_FullMethodName,
+		FullMethod: KamaCache_Delete_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LCacheServer).Delete(ctx, req.(*Request))
+		return srv.(KamaCacheServer).Delete(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// LCache_ServiceDesc is the grpc.ServiceDesc for LCache service.
+// KamaCache_ServiceDesc is the grpc.ServiceDesc for KamaCache service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var LCache_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "pb.LCache",
-	HandlerType: (*LCacheServer)(nil),
+var KamaCache_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "pb.KamaCache",
+	HandlerType: (*KamaCacheServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Get",
-			Handler:    _LCache_Get_Handler,
+			Handler:    _KamaCache_Get_Handler,
 		},
 		{
 			MethodName: "Set",
-			Handler:    _LCache_Set_Handler,
+			Handler:    _KamaCache_Set_Handler,
 		},
 		{
 			MethodName: "Delete",
-			Handler:    _LCache_Delete_Handler,
+			Handler:    _KamaCache_Delete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "lcache.proto",
+	Metadata: "pb/kama.proto",
 }

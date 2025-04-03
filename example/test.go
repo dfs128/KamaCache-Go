@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/juguagua/lcache"
+	lcache "github.com/youngyangyang04/KamaCache-Go"
 )
 
 func main() {

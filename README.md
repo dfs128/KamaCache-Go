@@ -27,7 +27,7 @@
 
 ### 1. 安装
 ```bash
-go get github.com/juguagua/lcache
+go get github.com/juguagua/kamacache
 ```
 
 ### 2. 启动 etcd
@@ -70,8 +70,8 @@ type ServerOptions struct {
 
 ### 缓存组配置
 ```go
-group := lcache.NewGroup("users", 2<<20, getter,
-    lcache.WithExpiration(time.Hour),    // 设置过期时间
+group := kamacache.NewGroup("users", 2<<20, getter,
+  kamacache.WithExpiration(time.Hour),    // 设置过期时间
 )
 ```
 

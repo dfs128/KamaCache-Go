@@ -1,4 +1,4 @@
-package lcache
+package kamacache
 
 import "strings"
 
