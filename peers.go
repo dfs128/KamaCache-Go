@@ -14,7 +14,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-const defaultSvcName = "KamaCache"
+const defaultSvcName = "kama-cache"
 
 // PeerPicker 定义了peer选择器的接口
 type PeerPicker interface {
