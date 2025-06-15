@@ -10,7 +10,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-)
+)//完成
 
 type Client struct {
 	addr    string
